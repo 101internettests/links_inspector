@@ -7,7 +7,7 @@ from datetime import datetime
 from typing import List, Dict, Any
 from bs4 import BeautifulSoup
 from google_sheets_service_account import GoogleSheetsServiceAccount
-from links.links_doc import urls_prod, urls_stage
+from links.main_links import main_urls_prod, urls_stage
 from config import SPREADSHEET_ID
 from telegram_bot import TelegramBot
 
@@ -23,7 +23,7 @@ logger = logging.getLogger(__name__)
 # Укажи путь к своему сервис-аккаунту и ID таблицы
 SERVICE_ACCOUNT_FILE = 'service-account-key.json'
 # SPREADSHEET_ID = '1afbfvzPn-SMPkTqPI6nmHv32mcQ3MTG0zu0DPBhCYm8'
-SHEET_NAME = 'Лист1'  # Имя листа для результатов
+SHEET_NAME = '101'  # Имя листа для результатов
 
 
 # ====== ФУНКЦИИ ======
@@ -132,7 +132,7 @@ def send_telegram_report(results: List[Dict[str, Any]]):
     errors = [r for r in results if r['prod_error'] or r['stage_error']]
     diffs = [r for r in results if any(r[f'h{i}_diff'] != 0 for i in range(1, 7)) or r['total_diff'] != 0]
     timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-    msg = f"<b>🌐 СЕО инспектор страниц</b>\n<i>{timestamp}</i>\n\n"
+    msg = f"<b>🌐 101 СЕО инспектор страниц</b>\n<i>{timestamp}</i>\n\n"
     msg += f"📄 Всего пар: <b>{total}</b>\n"
     msg += f"❌ Ошибок: <b>{len(errors)}</b>\n"
     msg += f"📊 Пар с разницей: <b>{len(diffs)}</b>\n"
@@ -163,11 +163,11 @@ def send_telegram_report(results: List[Dict[str, Any]]):
 
 
 def main():
-    if len(urls_prod) != len(urls_stage):
+    if len(main_urls_prod) != len(urls_stage):
         logger.error('Списки urls_prod и urls_stage должны быть одинаковой длины!')
         sys.exit(1)
     results = []
-    for prod_url, stage_url in zip(urls_prod, urls_stage):
+    for prod_url, stage_url in zip(main_urls_prod, urls_stage):
         logger.info(f"Проверяю пару:\n  PROD: {prod_url}\n  STAGE: {stage_url}")
         prod_result = analyze_url(prod_url)
         stage_result = analyze_url(stage_url)
