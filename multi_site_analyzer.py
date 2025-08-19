@@ -8,7 +8,7 @@ from datetime import datetime
 from typing import List, Dict, Any
 from bs4 import BeautifulSoup
 from google_sheets_service_account import GoogleSheetsServiceAccount
-from links.mol_links import urls_stage, mol_urls_prod
+from links.links_doc import urls_prod, urls_stage
 from config import SPREADSHEET_ID
 from telegram_bot import TelegramBot
 
@@ -23,8 +23,8 @@ logger = logging.getLogger(__name__)
 # ====== НАСТРОЙКИ ======
 # Укажи путь к своему сервис-аккаунту и ID таблицы
 SERVICE_ACCOUNT_FILE = 'service-account-key.json'
-# SPREADSHEET_ID = '1afbfvzPn-SMPkTqPI6nmHv32mcQ3MTG0zu0DPBhCYm8'
-SHEET_NAME = 'МОЛ'  # Имя листа для результатов
+# SPREADSHEET_ID берется из config
+SHEET_NAME = 'Лист1'  # Имя листа для результатов
 
 
 # ====== ФУНКЦИИ ======
@@ -42,7 +42,7 @@ def analyze_url(url: str) -> Dict[str, Any]:
         response.raise_for_status()
         soup = BeautifulSoup(response.content, 'html.parser')
 
-        # Заголовки
+        # Заголовки h1-h6
         headings = {}
         for i in range(1, 7):
             tag = f'h{i}'
@@ -58,16 +58,20 @@ def analyze_url(url: str) -> Dict[str, Any]:
         title_total = len(title_elements)
         title_non_empty = 0
         for t in title_elements:
-            text = (t.get_text() or '').strip()
+            text = t.get_text() if t else ''
+            if text is None:
+                text = ''
+            text = text.strip()
             if text and not re.search(r'error', text, re.IGNORECASE):
                 title_non_empty += 1
 
-        # Description
+        # Description (meta name=description, регистронезависимо)
         description_elements = soup.find_all('meta', attrs={'name': re.compile(r'^description$', re.IGNORECASE)})
         description_total = len(description_elements)
         description_non_empty = 0
         for m in description_elements:
-            content = (m.get('content') or '').strip()
+            content = m.get('content') or ''
+            content = content.strip()
             if content and not re.search(r'error', content, re.IGNORECASE):
                 description_non_empty += 1
 
@@ -186,18 +190,12 @@ def send_telegram_report(results: List[Dict[str, Any]]):
         return
     total = len(results)
     errors = [r for r in results if r['prod_error'] or r['stage_error']]
-    diffs = [
-        r for r in results
-        if any(r[f'h{i}_diff'] != 0 for i in range(1, 7))
-        or r['total_diff'] != 0
-        or r.get('title_diff', 0) != 0
-        or r.get('description_diff', 0) != 0
-    ]
+    diffs = [r for r in results if any(r[f'h{i}_diff'] != 0 for i in range(1, 7)) or r['total_diff'] != 0 or r['title_diff'] != 0 or r['description_diff'] != 0]
     timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-    msg = f"<b>🌐 МОЛ СЕО инспектор страниц</b>\n<i>{timestamp}</i>\n\n"
-    msg += f"📄 Всего пар: <b>{total}</b>\n"
-    msg += f"❌ Ошибок: <b>{len(errors)}</b>\n"
-    msg += f"📊 Пар с разницей: <b>{len(diffs)}</b>\n"
+    msg = f"<b>SEO Links Inspector</b>\n<i>{timestamp}</i>\n\n"
+    msg += f"Всего пар: <b>{total}</b>\n"
+    msg += f"Ошибок: <b>{len(errors)}</b>\n"
+    msg += f"Пар с разницей: <b>{len(diffs)}</b>\n"
     if errors:
         msg += f"\n<b>Ошибки:</b>"
         for r in errors[:10]:
@@ -212,25 +210,25 @@ def send_telegram_report(results: List[Dict[str, Any]]):
         msg += f"\n\n<b>Различия:</b>"
         for r in diffs[:10]:
             msg += f"\n- <a href='{r['prod_url']}'>Prod</a> / <a href='{r['stage_url']}'>Stage</a>"
-            # Заголовки
+            # Headings diffs
             for i in range(1, 7):
                 diff = r[f'h{i}_diff']
                 if diff != 0:
                     msg += f"\n  H{i} diff: {diff}"
             if r['total_diff'] != 0:
                 msg += f"\n  Headings total diff: {r['total_diff']}"
-            # Title/Description
-            if r.get('title_diff', 0) != 0:
+            # Title/Description diffs
+            if r['title_diff'] != 0:
                 msg += f"\n  Title diff: {r['title_diff']}"
-            if r.get('description_diff', 0) != 0:
+            if r['description_diff'] != 0:
                 msg += f"\n  Description diff: {r['description_diff']}"
         if len(diffs) > 10:
             msg += f"\n...ещё {len(diffs)-10} с разницей"
         
         # Сводка по типам различий
         h_diffs = sum(1 for r in diffs if any(r[f'h{i}_diff'] != 0 for i in range(1, 7)))
-        title_diffs = sum(1 for r in diffs if r.get('title_diff', 0) != 0)
-        desc_diffs = sum(1 for r in diffs if r.get('description_diff', 0) != 0)
+        title_diffs = sum(1 for r in diffs if r['title_diff'] != 0)
+        desc_diffs = sum(1 for r in diffs if r['description_diff'] != 0)
         msg += f"\n\n<b>Сводка различий:</b>"
         msg += f"\n📊 Пар с разницей по заголовкам: {h_diffs}"
         msg += f"\n📝 Пар с разницей по Title: {title_diffs}"
@@ -240,11 +238,11 @@ def send_telegram_report(results: List[Dict[str, Any]]):
 
 
 def main():
-    if len(mol_urls_prod) != len(urls_stage):
+    if len(urls_prod) != len(urls_stage):
         logger.error('Списки urls_prod и urls_stage должны быть одинаковой длины!')
         sys.exit(1)
     results = []
-    for prod_url, stage_url in zip(mol_urls_prod, urls_stage):
+    for prod_url, stage_url in zip(urls_prod, urls_stage):
         logger.info(f"Проверяю пару:\n  PROD: {prod_url}\n  STAGE: {stage_url}")
         prod_result = analyze_url(prod_url)
         stage_result = analyze_url(stage_url)
