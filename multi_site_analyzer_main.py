@@ -235,6 +235,7 @@ def send_telegram_report(results: List[Dict[str, Any]]):
         msg += f"\n📊 Пар с разницей по заголовкам: {h_diffs}"
         msg += f"\n📝 Пар с разницей по Title: {title_diffs}"
         msg += f"\n📄 Пар с разницей по Description: {desc_diffs}"
+    msg += "\n\n<i> 💥 Ссылка на отчет: https://docs.google.com/spreadsheets/d/1afbfvzPn-SMPkTqPI6nmHv32mcQ3MTG0zu0DPBhCYm8/edit?gid=2024145597#gid=2024145597 </i>"
     msg += "\n\n<i>🤖 Отправлено автоматически</i>"
     bot.send_message(msg)
 
